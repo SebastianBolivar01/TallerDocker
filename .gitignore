@@ -1,0 +1,21 @@
+# Build targets
+**/target/
+*.class
+
+# IDE & Editor files
+.idea/
+.vscode/
+*.iml
+*.iws
+*.ipr
+.settings/
+.project
+.classpath
+
+# Logs
+*.log
+!taller-docker-semana13/audit_session.log
+
+# OS generated files
+.DS_Store
+Thumbs.db
