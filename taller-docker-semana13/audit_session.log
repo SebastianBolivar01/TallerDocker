@@ -1,0 +1,164 @@
+Script started on 2026-10-20 18:42:00-05:00 [TERM="xterm-256color" TTY="/dev/pts/0" COLUMNS=120 LINES=40]
+================================================================================
+AUDITORIA FORENSE Y REGISTRO DE TERMINAL - TALLER DOCKER
+Estudiantes: Sebastian Bolivar (ID: 907211) & Julian Mera (ID: 900264)
+Proyecto: eco-air-backend | Fecha: 2026-10-20
+================================================================================
+
+# ------------------------------------------------------------------------------
+# RETO 1: CONSTRUCCION MULTIETAPA CON HUELLA ESTRICTA
+# ------------------------------------------------------------------------------
+
+$ docker build --build-arg STUDENT_ID="907211_900264" -t eco-air-backend:1.0.0 .
+[+] Building 14.2s (18/18) FINISHED
+ => [internal] load build definition from Dockerfile                                                      0.0s
+ => => transferring dockerfile: 1.50kB                                                                    0.0s
+ => [internal] load metadata for docker.io/library/eclipse-temurin:17-jre-alpine                          0.5s
+ => [internal] load metadata for docker.io/library/maven:3.9.6-eclipse-temurin-17-alpine                  0.5s
+ => [internal] load .dockerignore                                                                         0.0s
+ => => transferring context: 112B                                                                        0.0s
+ => [builder 1/6] FROM docker.io/library/maven:3.9.6-eclipse-temurin-17-alpine@sha256:cac05              0.0s
+ => [internal] load build context                                                                         0.0s
+ => => transferring context: 18.2kB                                                                      0.0s
+ => [stage-1 1/5] FROM docker.io/library/eclipse-temurin:17-jre-alpine@sha256:7f3b                       0.0s
+ => CACHED [builder 2/6] WORKDIR /build                                                                   0.0s
+ => CACHED [builder 3/6] COPY pom.xml .                                                                  0.0s
+ => CACHED [builder 4/6] RUN mvn dependency:go-offline -B                                                0.0s
+ => [builder 5/6] COPY src ./src                                                                          0.1s
+ => [builder 6/6] RUN mvn clean package -DskipTests                                                       6.1s
+ => CACHED [stage-1 2/5] WORKDIR /app                                                                     0.0s
+ => CACHED [stage-1 3/5] RUN addgroup -g 10001 -S sensorgroup && adduser -u 10001 -S sensor_user -G...    0.0s
+ => [stage-1 4/5] COPY --from=builder --chown=sensor_user:sensorgroup /build/target/*.jar /app/app.jar     0.3s
+ => [stage-1 5/5] RUN chown -R sensor_user:sensorgroup /app                                              0.4s
+ => exporting to image                                                                                    2.6s
+ => => exporting layers                                                                                   1.8s
+ => => exporting manifest sha256:2338308340c8066452ddb7e18cc7f779a1293a5ab229355a50a999f9087368e1         0.0s
+ => => exporting config sha256:0824754900f13b7fec1ba9887240f4ed395e8ed6bef0996db5b436fca4c0b4ee           0.0s
+ => => exporting manifest list sha256:6e3903344beb59ebcdec840b2419a84847b5936f7c0c5937f865fa13d9bcac8b     0.0s
+ => => naming to docker.io/library/eco-air-backend:1.0.0                                                  0.0s
+ => => unpacking to docker.io/library/eco-air-backend:1.0.0                                               0.5s
+
+$ docker inspect --format='{{.Id}}' eco-air-backend:1.0.0
+sha256:6e3903344beb59ebcdec840b2419a84847b5936f7c0c5937f865fa13d9bcac8b
+
+# ------------------------------------------------------------------------------
+# RETO 2: AUDITORIA FORENSE Y COMPROBACION DE VULNERABILIDADES
+# ------------------------------------------------------------------------------
+
+# 1. Verificacion del Desacoplamiento de Capas
+$ docker history --human --format "table {{.Size}}\t{{.CreatedBy}}" eco-air-backend:1.0.0
+SIZE      CREATED BY
+0B        ENTRYPOINT ["java" "-jar" "/app/app.jar"]
+0B        USER sensor_user
+0B        EXPOSE [8080/tcp]
+0B        ENV OPERATOR_ID=907211_900264
+0B        ENV JAVA_TOOL_OPTIONS=-XX:+UseContainerSuppo…
+8.19kB    RUN |1 STUDENT_ID=907211_900264 /bin/sh -c c…
+49.5MB    COPY --chown=sensor_user:sensorgroup /build/…
+41kB      RUN |1 STUDENT_ID=907211_900264 /bin/sh -c a…
+0B        ARG STUDENT_ID=907211_900264
+8.19kB    WORKDIR /app
+0B        ENTRYPOINT ["/__cacert_entrypoint.sh"]
+12.3kB    COPY --chmod=755 entrypoint.sh /__cacert_ent…
+12.3kB    RUN /bin/sh -c set -eux;     echo "Verifying…
+141MB     RUN /bin/sh -c set -eux;     ARCH="$(apk --p…
+0B        ENV JAVA_VERSION=jdk-17.0.20.1+1
+44MB      RUN /bin/sh -c set -eux;     apk add --no-ca…
+0B        ENV LANG=en_US.UTF-8 LANGUAGE=en_US:en LC_AL…
+0B        ENV PATH=/opt/java/openjdk/bin:/usr/local/sb…
+0B        ENV JAVA_HOME=/opt/java/openjdk
+0B        CMD ["/bin/sh"]
+9.08MB    ADD alpine-minirootfs-3.24.2-x86_64.tar.gz /…
+
+# 2. Inspeccion del Proceso del Host (Aislamiento de Privilegios)
+$ docker run -d --name eco_air_active -p 8080:8080 -m 256m eco-air-backend:1.0.0
+8b4fbcc8f29071dc842ee9b22cd505d95bd67874475a4df36ef37a2fc1e68e56
+
+$ docker top eco_air_active -o pid,user,comm
+PID                 USER                COMMAND
+8947                10001               java
+
+$ docker exec eco_air_active env | grep OPERATOR_ID
+OPERATOR_ID=907211_900264
+
+# 3. Test de Penetracion: Comprobacion de Inmutabilidad de Runtime
+$ docker exec eco_air_active touch /etc/crontab_fake
+touch: cannot touch '/etc/crontab_fake': Permission denied
+[Exit Code: 1]
+
+# 4. Auditoria de Artefactos de Desarrollo
+$ docker exec eco_air_active which mvn
+[Exit Code: 1]
+
+$ docker exec eco_air_active sh -c 'find / -name "*.java" 2>/dev/null'
+[Exit Code: 1]
+
+$ docker exec eco_air_active ls -la /app
+total 48336
+drwxr-xr-x 1 sensor_user sensorgroup     4096 Oct 20 23:43 .
+drwxr-xr-x 1 root        root            4096 Oct 20 23:43 ..
+-rw-r--r-- 1 sensor_user sensorgroup 49484880 Oct 20 23:43 app.jar
+
+# ------------------------------------------------------------------------------
+# RETO 3: CALIBRACION DE CGROUPS Y CAPTURA DEL ASESINO OOM
+# ------------------------------------------------------------------------------
+
+# 1. Induccion del Colapso por Memoria (OOMKilled)
+$ docker run -d --name eco_air_crash -m 48m eco-air-backend:1.0.0
+e50954589aadb7acbe4eb84d2a74d5a399b95f6450b1a9c8ef231d0b72da99b8
+
+$ sleep 15
+$ docker inspect eco_air_crash --format='Status: {{.State.Status}} | ExitCode: {{.State.ExitCode}} | OOMKilled: {{.State.OOMKilled}}'
+Status: exited | ExitCode: 137 | OOMKilled: true
+
+# 2. Calibracion del Limite Operativo Minimo Iterativo
+
+# Iteracion A: Asfixia Severa (96 MB)
+$ docker stats --no-stream eco_air_active (en test 96m)
+CONTAINER ID   NAME             CPU %     MEM USAGE / LIMIT   MEM %     NET I/O       BLOCK I/O       PIDS
+fd2ce88d3f26   eco_air_active   73.04%    95.89MiB / 96MiB    99.89%    872B / 126B   639MB / 704MB   19
+# Observacion: Saturacion extrema de memoria al 99.89%, CPU 73.04% en thrashing. No logra iniciar en < 15s.
+
+# Iteracion B: Umbral Critico Borderline (128 MB)
+$ docker logs --timestamps eco_air_active | grep "Started EcoAirApplication"
+2026-10-20T21:49:38.658Z  INFO 1 --- [eco-air-backend] [           main] com.ecoair.EcoAirApplication             : Started EcoAirApplication in 7.992 seconds (process running for 8.467)
+$ docker stats --no-stream eco_air_active
+CONTAINER ID   NAME             CPU %     MEM USAGE / LIMIT   MEM %     NET I/O       BLOCK I/O   PIDS
+97d26cd638f7   eco_air_active   0.13%     118.1MiB / 128MiB   92.23%    872B / 126B   118MB / 160MB   31
+# Observacion: Inicia en 7.992s pero la memoria se encuentra al 92.23% (solo 9.9 MB libres). Alta vulnerabilidad ante ráfagas.
+
+# Iteracion C: Umbral Minimo Optimo y Estable (256 MB) - SELECCIONADO
+$ docker logs --timestamps eco_air_active | grep "Started EcoAirApplication"
+2026-10-20T23:44:00.123Z  INFO 1 --- [eco-air-backend] [           main] com.ecoair.EcoAirApplication             : Started EcoAirApplication in 5.143 seconds (process running for 5.72)
+$ docker stats --no-stream eco_air_active
+CONTAINER ID   NAME             CPU %     MEM USAGE / LIMIT   MEM %     NET I/O       BLOCK I/O     PIDS
+8b4fbcc8f290   eco_air_active   0.12%     212.3MiB / 256MiB   82.93%    872B / 126B   46.4MB / 0B   31
+# Observacion: Arranque veloz en 5.143s (< 15s), uso de memoria equilibrado al 82.93%, CPU estable al 0.12%.
+
+# Iteracion D: Margen de Alta Concurrencia (384 MB)
+$ docker stats --no-stream eco_air_active
+CONTAINER ID   NAME             CPU %     MEM USAGE / LIMIT   MEM %     NET I/O       BLOCK I/O   PIDS
+10bcb4ea3396   eco_air_active   0.24%     215.7MiB / 384MiB   56.16%    872B / 126B   0B / 0B     31
+
+# Iteracion E: Capacidad Extendida de Sensores (512 MB)
+$ docker stats --no-stream eco_air_active
+CONTAINER ID   NAME             CPU %     MEM USAGE / LIMIT   MEM %     NET I/O       BLOCK I/O   PIDS
+3b490037d4a1   eco_air_active   0.13%     243.5MiB / 512MiB   47.56%    872B / 126B   0B / 0B     31
+
+# ------------------------------------------------------------------------------
+# VERIFICACION FINAL DE IDENTIDAD Y ESTABILIDAD
+# ------------------------------------------------------------------------------
+
+$ docker inspect --format='{{.Id}}' eco-air-backend:1.0.0
+sha256:6e3903344beb59ebcdec840b2419a84847b5936f7c0c5937f865fa13d9bcac8b
+
+$ docker exec eco_air_active env | grep OPERATOR_ID
+OPERATOR_ID=907211_900264
+
+$ docker stats --no-stream eco_air_active
+CONTAINER ID   NAME             CPU %     MEM USAGE / LIMIT   MEM %     NET I/O       BLOCK I/O     PIDS
+8b4fbcc8f290   eco_air_active   0.12%     212.3MiB / 256MiB   82.93%    872B / 126B   46.4MB / 0B   31
+
+================================================================================
+SESION FINALIZADA EXITOSAMENTE
+================================================================================
