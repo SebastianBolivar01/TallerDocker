@@ -35,7 +35,30 @@ El microservicio **`eco-air-backend`** procesa telemetría y alertas ambientales
 
 ---
 
-## 🚀 Guía de Ejecución Rápida
+## 🐳 Orquestación con Docker Compose (Recomendado)
+
+El archivo `docker-compose.yml` encapsula las cuotas estrictas de hardware (cgroups), variables ergonómicas, healthchecks y aislamiento de red en un solo comando:
+
+```bash
+# 1. Levantar el servicio calibrado (256 MB) en segundo plano
+docker compose up -d
+
+# 2. Verificar estado y salud del contenedor (healthcheck)
+docker compose ps
+
+# 3. Comprobar que el proceso corre bajo el usuario 10001 (sensor_user)
+docker compose top
+
+# 4. Probar inducción de colapso OOM Killer en Compose (perfil de prueba)
+docker compose --profile oom-test up eco-air-crash
+
+# 5. Detener y remover servicios
+docker compose down
+```
+
+---
+
+## 🚀 Guía de Ejecución Standalone (Comandos Directos Docker)
 
 ### Construcción de la Imagen
 ```bash
@@ -75,6 +98,7 @@ docker stats --no-stream eco_air_active
 ## 📂 Estructura del Repositorio
 ```
 .
+├── docker-compose.yml              # Orquestación declarativa con cgroups y healthchecks
 ├── eco-air-backend/                # Código fuente del microservicio Spring Boot 3 + Hibernate
 │   ├── pom.xml
 │   ├── Dockerfile

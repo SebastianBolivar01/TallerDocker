@@ -1,0 +1,64 @@
+services:
+  # =========================================================================
+  # Servicio Principal: Microservicio de Produccion Calibrado (256 MB)
+  # =========================================================================
+  eco-air-backend:
+    build:
+      context: ./eco-air-backend
+      dockerfile: Dockerfile
+      args:
+        STUDENT_ID: "907211_900264"
+    image: eco-air-backend:1.0.0
+    container_name: eco_air_active
+    ports:
+      - "8080:8080"
+    environment:
+      - OPERATOR_ID=907211_900264
+      - JAVA_TOOL_OPTIONS=-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:InitialRAMPercentage=50.0 -Djava.security.egd=file:/dev/./urandom
+    # Restricciones estrictas de hardware (cgroups v2)
+    mem_limit: 256m
+    mem_reservation: 128m
+    cpus: 1.0
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "1.0"
+        reservations:
+          memory: 128M
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:8080/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    networks:
+      - eco_air_net
+
+  # =========================================================================
+  # Servicio de Diagnostico: Induccion de Colapso OOM Killer (48 MB)
+  # Ejecutar unicamente bajo demanda: docker compose --profile oom-test up eco-air-crash
+  # =========================================================================
+  eco-air-crash:
+    build:
+      context: ./eco-air-backend
+      dockerfile: Dockerfile
+      args:
+        STUDENT_ID: "907211_900264"
+    image: eco-air-backend:1.0.0
+    container_name: eco_air_crash
+    mem_limit: 48m
+    deploy:
+      resources:
+        limits:
+          memory: 48M
+    profiles:
+      - oom-test
+    networks:
+      - eco_air_net
+
+networks:
+  eco_air_net:
+    name: eco_air_network
+    driver: bridge
